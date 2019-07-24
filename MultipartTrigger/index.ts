@@ -11,7 +11,7 @@ const httpTrigger: AzureFunction = async function(
     try {
       let res = parseAzureRequest(req);
       context.res = {
-        status: 500,
+        status: 200,
         body: res
       };
     } catch (err) {
