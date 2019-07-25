@@ -38,10 +38,16 @@ const mimeTypes: MultipartMimeType[] = [
 const mimeTypesForRe = mimeTypes.map(str => `(${str.replace("/", "//")})`);
 
 function parseAzureRequest(req: HttpRequest): string {
+  // fun fact: Azure lower-cases the headers (y)
+  let contentTypeHeader = req.headers["content-type"];
+  if (!contentTypeHeader) {
+    throw `Content-Type header is missing; got ${contentTypeHeader}; req.headers ${JSON.stringify(
+      req.headers
+    )}`;
+  }
+
   // extract boundary from this
-  let [contentType, boundary] = parseContentTypeHeader(
-    req.headers["Content-Type"]
-  );
+  let [contentType, boundary] = parseContentTypeHeader(contentTypeHeader);
 
   // according to a comment in typings, this is WTF-8'ised body of the message
   // let rawBody: string = req.rawBody!;
@@ -101,7 +107,7 @@ function parseContentTypeHeader(header: string): [MultipartMimeType, string] {
   return [mimeType, boundary];
 }
 
-function parseRawBody(body: any): object {
+function parseRawBody(body?: any): object {
   // we first have to discover what it is, really
   // so in the first iteration I'll be just identifing the object
   // and returning some data regarding it
