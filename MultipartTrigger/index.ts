@@ -22,7 +22,7 @@ const httpTrigger: AzureFunction = async function(
       let res = parseAzureRequest(req, debugObj);
       context.res = {
         status: 200,
-        body: res
+        body: JSON.stringify(res)
       };
     } catch (err) {
       debugObj["stoppedAt"] = err;
@@ -53,7 +53,17 @@ function copyOntoField(target: any, field: string, source: any): void {
   Object.assign(target[field], source);
 }
 
-function parseAzureRequest(req: HttpRequest, debugObj: any): string {
+interface ParsedAzureRequest {
+  rawBody: ParsedBody;
+  body: ParsedBody;
+  contentType: MultipartMimeType;
+  boundary: string;
+}
+
+function parseAzureRequest(
+  req: HttpRequest,
+  debugObj: any
+): ParsedAzureRequest {
   ["headers"].forEach(element => {
     copyOntoField(debugObj, element, req[element]);
   });
@@ -84,7 +94,7 @@ function parseAzureRequest(req: HttpRequest, debugObj: any): string {
     boundary: boundary
   };
 
-  return JSON.stringify(data);
+  return data;
 }
 
 const boundaryRe = /boundary=([\S ]*\S)/;
