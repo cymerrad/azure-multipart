@@ -27,19 +27,7 @@ const httpTrigger: AzureFunction = async function(
     };
   }
 
-  req.rawBody;
-
-  if (name) {
-    context.res = {
-      // status: 200, /* Defaults to 200 */
-      body: "Hello " + (req.query.name || req.body.name)
-    };
-  } else {
-    context.res = {
-      status: 400,
-      body: "Please pass a name on the query string or in the request body"
-    };
-  }
+  context;
 };
 
 // duplication but much easier and cleaner than https://stackoverflow.com/questions/44154009/get-array-of-string-literal-type-values
