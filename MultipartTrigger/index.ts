@@ -1,21 +1,22 @@
-import { AzureFunction, Context, HttpRequest } from "@azure/functions";
+import { Context, HttpRequest } from "@azure/functions";
 
 type WTF8Body = string;
-type ByteBufferBody = {
-  type: "Buffer"; // or maybe something else
-  data: Uint8Array;
-};
+// type ByteBufferBody = {
+//   type: "Buffer"; // or maybe something else
+//   data: Uint8Array;
+// };
+type ByteBufferBody = Uint8Array;
 interface HttpRequestDetailed extends HttpRequest {
   body?: ByteBufferBody;
   rawBody?: WTF8Body;
 }
 
-const httpTrigger: AzureFunction = async function(
+async function httpTrigger(
   context: Context,
   req: HttpRequestDetailed
 ): Promise<void> {
   context.log("HTTP trigger function processed a request.");
-  let debugObj = {};
+  let debugObj = { stoppedAt: "httpTrigger" };
 
   if (req.method == "POST") {
     try {
@@ -25,7 +26,7 @@ const httpTrigger: AzureFunction = async function(
         body: JSON.stringify(res)
       };
     } catch (err) {
-      debugObj["stoppedAt"] = err;
+      debugObj["catchErr"] = err;
       context.res = {
         status: 500,
         body: JSON.stringify(debugObj)
@@ -39,7 +40,7 @@ const httpTrigger: AzureFunction = async function(
   }
 
   context.done();
-};
+}
 
 // duplication but much easier and cleaner than https://stackoverflow.com/questions/44154009/get-array-of-string-literal-type-values
 type MultipartMimeType = "multipart/form-data" | "multipart/mixed";
@@ -61,9 +62,11 @@ interface ParsedAzureRequest {
 }
 
 function parseAzureRequest(
-  req: HttpRequest,
+  req: HttpRequestDetailed,
   debugObj: any
 ): ParsedAzureRequest {
+  debugObj["stoppedAt"] = "parseAzureRequest";
+
   ["headers"].forEach(element => {
     copyOntoField(debugObj, element, req[element]);
   });
@@ -87,9 +90,22 @@ function parseAzureRequest(
   // let rawBody: string = req.rawBody!;
   // let semiRawBody: string = req.body;
 
+  let rawBody, body;
+  if (req.rawBody) {
+    rawBody = parseRawBody(req.rawBody!, debugObj);
+  } else {
+    rawBody = { error: "missing" };
+  }
+
+  if (req.body) {
+    body = parseRawBody(req.body!, debugObj);
+  } else {
+    body = { error: "missing" };
+  }
+
   let data = {
-    rawBody: parseRawBody(req.rawBody, debugObj),
-    body: parseRawBody(req.body, debugObj),
+    rawBody: rawBody,
+    body: body,
     contentType: contentType,
     boundary: boundary
   };
@@ -112,6 +128,8 @@ function parseContentTypeHeader(
   header: string,
   debugObj: any
 ): [MultipartMimeType, string] {
+  debugObj["stoppedAt"] = "parseContentTypeHeader";
+
   let split = header.split(";");
   // we are looking for a boundary and a "multipart/form-data"
   // in general it could be "multipart/mixed" with separate content type for each part
@@ -156,7 +174,7 @@ interface ParsedBody {
 }
 
 function parseRawBody(
-  body?: WTF8Body | ByteBufferBody,
+  body: WTF8Body | ByteBufferBody,
   debugObj?: any
 ): ParsedBody {
   // we first have to discover what it is, really
@@ -164,6 +182,8 @@ function parseRawBody(
   // and returning some data regarding it
 
   let type = typeof body;
+  debugObj["stoppedAt"] = `parseRawBody@${type}`;
+
   switch (type) {
     case "string":
       let coercedW = body as WTF8Body;
@@ -175,19 +195,23 @@ function parseRawBody(
         buffer: buf,
         rest: top10
       };
-      break;
+    // break;
 
     case "object":
+      let buff;
       let coercedB = body as ByteBufferBody;
-      let buff = coercedB.data;
+      try {
+        buff = Buffer.from(coercedB);
+      } catch (err) {
+        throw "Creating buffer failed; " + err;
+      }
 
-      delete coercedB.data;
       return {
         type: type,
         buffer: buff,
-        rest: JSON.stringify(coercedB)
+        rest: ""
       };
-      break;
+    // break;
 
     default:
       return {
@@ -195,7 +219,7 @@ function parseRawBody(
         rest: body,
         buffer: Buffer.from([])
       };
-      break;
+    // break;
   }
 }
 
