@@ -5,7 +5,6 @@ const httpTrigger: AzureFunction = async function(
   req: HttpRequest
 ): Promise<void> {
   context.log("HTTP trigger function processed a request.");
-  const name = req.query.name || (req.body && req.body.name);
 
   if (req.method == "POST") {
     try {
@@ -27,7 +26,7 @@ const httpTrigger: AzureFunction = async function(
     };
   }
 
-  context;
+  context.done();
 };
 
 // duplication but much easier and cleaner than https://stackoverflow.com/questions/44154009/get-array-of-string-literal-type-values
