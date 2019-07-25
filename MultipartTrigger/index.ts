@@ -5,18 +5,20 @@ const httpTrigger: AzureFunction = async function(
   req: HttpRequest
 ): Promise<void> {
   context.log("HTTP trigger function processed a request.");
+  let debugObj = {};
 
   if (req.method == "POST") {
     try {
-      let res = parseAzureRequest(req);
+      let res = parseAzureRequest(req, debugObj);
       context.res = {
         status: 200,
         body: res
       };
     } catch (err) {
+      debugObj["stoppedAt"] = err;
       context.res = {
         status: 500,
-        body: `Could not process the body: ${err}`
+        body: JSON.stringify(debugObj)
       };
     }
   } else {
@@ -35,27 +37,39 @@ const mimeTypes: MultipartMimeType[] = [
   "multipart/form-data",
   "multipart/mixed"
 ];
-const mimeTypesForRe = mimeTypes.map(str => `(${str.replace("/", "//")})`);
 
-function parseAzureRequest(req: HttpRequest): string {
+function copyOntoField(target: any, field: string, source: any): void {
+  target[field] = target[field] || {};
+  Object.assign(target[field], source);
+}
+
+function parseAzureRequest(req: HttpRequest, debugObj: any): string {
+  ["headers"].forEach(element => {
+    copyOntoField(debugObj, element, req[element]);
+  });
+
   // fun fact: Azure lower-cases the headers (y)
   let contentTypeHeader = req.headers["content-type"];
   if (!contentTypeHeader) {
-    throw `Content-Type header is missing; got ${contentTypeHeader}; req.headers ${JSON.stringify(
-      req.headers
-    )}`;
+    throw `Content-Type header is missing`;
   }
 
   // extract boundary from this
-  let [contentType, boundary] = parseContentTypeHeader(contentTypeHeader);
+  let [contentType, boundary] = parseContentTypeHeader(
+    contentTypeHeader,
+    debugObj
+  );
+
+  debugObj["contentType"] = contentType;
+  debugObj["boundary"] = boundary;
 
   // according to a comment in typings, this is WTF-8'ised body of the message
   // let rawBody: string = req.rawBody!;
   // let semiRawBody: string = req.body;
 
   let data = {
-    rawBody: parseRawBody(req.rawBody),
-    body: parseRawBody(req.body),
+    rawBody: parseRawBody(req.rawBody, debugObj),
+    body: parseRawBody(req.body, debugObj),
     contentType: contentType,
     boundary: boundary
   };
@@ -64,6 +78,7 @@ function parseAzureRequest(req: HttpRequest): string {
 }
 
 const boundaryRe = /boundary=([\S ]*\S)/;
+const mimeTypesForRe = mimeTypes.map(str => `(${str})`);
 const mimeRe = new RegExp(mimeTypesForRe.join("|"));
 /**
  * according to HTTP specification (https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html)
@@ -73,7 +88,10 @@ const mimeRe = new RegExp(mimeTypesForRe.join("|"));
  * e.g. boundary=0a'()+_,-./:=? end
  * @param val
  */
-function parseContentTypeHeader(header: string): [MultipartMimeType, string] {
+function parseContentTypeHeader(
+  header: string,
+  debugObj: any
+): [MultipartMimeType, string] {
   let split = header.split(";");
   // we are looking for a boundary and a "multipart/form-data"
   // in general it could be "multipart/mixed" with separate content type for each part
@@ -97,28 +115,49 @@ function parseContentTypeHeader(header: string): [MultipartMimeType, string] {
   });
 
   if (mimeType === undefined) {
+    debugObj["headerPart"] = split;
+    debugObj["regexes"] = [mimeRe.toString(), boundaryRe.toString()];
     throw "Incorrect mime type";
   }
 
   if (boundary === undefined) {
+    debugObj["headerPart"] = split;
+    debugObj["regexes"] = [mimeRe.toString(), boundaryRe.toString()];
     throw "Incorrect boundary (HOW?!)";
   }
 
   return [mimeType, boundary];
 }
 
-function parseRawBody(body?: any): object {
+function parseRawBody(body?: any, debugObj?: any): object {
   // we first have to discover what it is, really
   // so in the first iteration I'll be just identifing the object
   // and returning some data regarding it
+  let data = {};
 
   let type = typeof body;
-  let top10 = type !== "string" ? "" : top(body, 10);
+  switch (type) {
+    case "string":
+      let top10 = type !== "string" ? "" : top(body, 10);
 
-  let data = {
-    type,
-    top10
-  };
+      data = {
+        type,
+        top10
+      };
+      break;
+    case "object":
+      data = {
+        type,
+        json: JSON.stringify(body)
+      };
+      break;
+
+    default:
+      data = {
+        type
+      };
+      break;
+  }
 
   return data;
 }
