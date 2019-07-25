@@ -8,12 +8,12 @@
     "prestart": "npm run build && func extensions install",
     "start:host": "func start",
     "start": "npm run start:host & npm run watch",
-    "build:production": "npm run prestart",
+    "build:production": "npm run prestart && npm prune --production",
     "test": "echo \"No tests yet...\""
   },
-  "dependencies": {},
-  "devDependencies": {
+  "dependencies": {
     "@azure/functions": "^1.0.2-beta2",
     "typescript": "^3.3.3"
-  }
+  },
+  "devDependencies": {}
 }
