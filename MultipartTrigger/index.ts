@@ -1,8 +1,18 @@
 import { AzureFunction, Context, HttpRequest } from "@azure/functions";
 
+type WTF8Body = string;
+type ByteBufferBody = {
+  type: "Buffer"; // or maybe something else
+  data: Uint8Array;
+};
+interface HttpRequestDetailed extends HttpRequest {
+  body?: ByteBufferBody;
+  rawBody?: WTF8Body;
+}
+
 const httpTrigger: AzureFunction = async function(
   context: Context,
-  req: HttpRequest
+  req: HttpRequestDetailed
 ): Promise<void> {
   context.log("HTTP trigger function processed a request.");
   let debugObj = {};
@@ -129,37 +139,54 @@ function parseContentTypeHeader(
   return [mimeType, boundary];
 }
 
-function parseRawBody(body?: any, debugObj?: any): object {
+interface ParsedBody {
+  type: string;
+  buffer: Uint8Array;
+  rest: any;
+}
+
+function parseRawBody(
+  body?: WTF8Body | ByteBufferBody,
+  debugObj?: any
+): ParsedBody {
   // we first have to discover what it is, really
   // so in the first iteration I'll be just identifing the object
   // and returning some data regarding it
-  let data = {};
 
   let type = typeof body;
   switch (type) {
     case "string":
-      let top10 = type !== "string" ? "" : top(body, 10);
+      let coercedW = body as WTF8Body;
+      let top10 = type !== "string" ? "" : top(coercedW, 10);
+      let buf = Buffer.from(coercedW, "utf8");
 
-      data = {
-        type,
-        top10
+      return {
+        type: type,
+        buffer: buf,
+        rest: top10
       };
       break;
+
     case "object":
-      data = {
-        type,
-        json: JSON.stringify(body)
+      let coercedB = body as ByteBufferBody;
+      let buff = coercedB.data;
+
+      delete coercedB.data;
+      return {
+        type: type,
+        buffer: buff,
+        rest: JSON.stringify(coercedB)
       };
       break;
 
     default:
-      data = {
-        type
+      return {
+        type,
+        rest: body,
+        buffer: Buffer.from([])
       };
       break;
   }
-
-  return data;
 }
 
 function top(text: string, lineCount: number): string {
